@@ -1,0 +1,391 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #1a1a2e;
+  color: #eee;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 220px;
+  background: #16162a;
+  border-right: 1px solid #333;
+  padding: 15px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.sidebar h2 {
+  font-size: 14px;
+  color: #888;
+  margin: 0 0 15px 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.sidebar-empty {
+  color: #555;
+  font-size: 12px;
+  text-align: center;
+  padding: 20px 0;
+}
+.project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.project-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  background: #2a2a4a;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.project-item:hover {
+  background: #3a3a5a;
+}
+.project-item.active {
+  background: #4a5a7a;
+  border: 1px solid #6a7a9a;
+}
+.project-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  object-fit: cover;
+  background: #fff;
+  flex-shrink: 0;
+}
+.project-info {
+  flex: 1;
+  min-width: 0;
+}
+.project-name {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.project-date {
+  font-size: 10px;
+  color: #666;
+}
+.project-delete {
+  opacity: 0;
+  background: none;
+  border: none;
+  color: #f66;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px;
+  transition: opacity 0.2s;
+}
+.project-item:hover .project-delete {
+  opacity: 1;
+}
+.project-delete:hover {
+  color: #f99;
+}
+.new-project-btn {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 15px;
+  background: #4a6a8a;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.new-project-btn:hover {
+  background: #5a7a9a;
+}
+.clear-all-btn {
+  margin-top: 15px;
+  width: 100%;
+  padding: 8px;
+  background: #4a3a3a;
+  border: none;
+  border-radius: 4px;
+  color: #faa;
+  font-size: 11px;
+  cursor: pointer;
+}
+.clear-all-btn:hover {
+  background: #5a4a4a;
+}
+
+/* Main content */
+.main-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+h1 {
+  text-align: center;
+  margin-bottom: 10px;
+}
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Upload Section */
+.upload-section {
+  background: #2a2a4a;
+  border-radius: 12px;
+  padding: 30px;
+  margin-bottom: 30px;
+}
+.upload-section h2 {
+  margin-top: 0;
+  margin-bottom: 20px;
+}
+.upload-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: flex-end;
+}
+.upload-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.upload-group label {
+  font-size: 14px;
+  color: #aaa;
+}
+.upload-group input[type="file"] {
+  padding: 10px;
+  background: #3a3a5a;
+  border: 2px dashed #555;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+}
+.upload-group input[type="file"]:hover {
+  border-color: #777;
+}
+.upload-group input[type="number"] {
+  padding: 10px;
+  background: #3a3a5a;
+  border: 1px solid #555;
+  border-radius: 6px;
+  color: #fff;
+  width: 100px;
+  font-size: 16px;
+}
+.convert-btn {
+  padding: 12px 30px;
+  background: #5a7a9a;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.convert-btn:hover {
+  background: #6a8aaa;
+}
+.convert-btn:disabled {
+  background: #444;
+  cursor: not-allowed;
+}
+.status {
+  margin-top: 15px;
+  padding: 10px;
+  border-radius: 6px;
+  display: none;
+}
+.status.visible {
+  display: block;
+}
+.status.processing {
+  background: #3a4a5a;
+  color: #8af;
+}
+.status.success {
+  background: #2a4a3a;
+  color: #8fa;
+}
+.status.error {
+  background: #4a2a3a;
+  color: #faa;
+}
+
+/* Preview */
+.preview-section {
+  display: none;
+  margin-bottom: 20px;
+}
+.preview-section.visible {
+  display: block;
+}
+.preview-row {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.preview-box {
+  background: #2a2a4a;
+  border-radius: 8px;
+  padding: 15px;
+}
+.preview-box h3 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  color: #888;
+}
+.preview-box img, .preview-box canvas {
+  max-width: 300px;
+  max-height: 300px;
+  border-radius: 4px;
+  background: #fff;
+}
+
+/* Controls */
+.controls {
+  text-align: center;
+  margin-bottom: 20px;
+  display: none;
+}
+.controls.visible {
+  display: block;
+}
+.controls label {
+  margin-right: 20px;
+}
+.controls input[type="range"] {
+  width: 150px;
+  vertical-align: middle;
+}
+.controls button {
+  padding: 8px 16px;
+  margin: 0 5px;
+  border: none;
+  border-radius: 4px;
+  background: #4a4a6a;
+  color: #fff;
+  cursor: pointer;
+}
+.controls button:hover {
+  background: #5a5a8a;
+}
+
+/* Grid */
+.result-section {
+  display: none;
+}
+.result-section.visible {
+  display: block;
+}
+.pattern-info {
+  text-align: center;
+  color: #888;
+  margin-bottom: 20px;
+}
+.grid-wrapper {
+  overflow: auto;
+  border: 2px solid #333;
+  border-radius: 8px;
+  background: #111;
+  margin-bottom: 30px;
+}
+.grid {
+  display: grid;
+  gap: 0;
+}
+.cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: bold;
+  border: 1px solid rgba(0,0,0,0.2);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.cell:hover {
+  transform: scale(1.5);
+  z-index: 10;
+  box-shadow: 0 0 10px rgba(255,255,255,0.5);
+}
+.cell.show-codes {
+  font-size: 6px;
+}
+
+/* Legend */
+.legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: #2a2a4a;
+  border-radius: 6px;
+}
+.legend-swatch {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  border: 2px solid #555;
+  flex-shrink: 0;
+}
+.legend-info {
+  font-size: 13px;
+}
+.legend-info strong {
+  display: block;
+  font-size: 16px;
+}
+.legend-info .hex {
+  color: #aaa;
+}
+.legend-info .count {
+  color: #888;
+  font-size: 11px;
+}
+h2 {
+  margin-top: 0;
+}
+
+/* Download buttons */
+.download-section {
+  display: none;
+  margin-top: 20px;
+  text-align: center;
+}
+.download-section.visible {
+  display: block;
+}
+.download-btn {
+  padding: 10px 20px;
+  margin: 5px;
+  background: #4a6a4a;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+}
+.download-btn:hover {
+  background: #5a7a5a;
+}
