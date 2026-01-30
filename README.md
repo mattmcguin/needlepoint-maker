@@ -1,4 +1,7 @@
-# Needlepoint Pattern Converter
+<h1>
+  <img src="images/needlepoint-bear.jpg" alt="Needlepoint Maker" width="80" style="border-radius: 8px; vertical-align: middle; margin-right: 12px;">
+  Needlepoint Maker
+</h1>
 
 A web application that transforms any image into a needlepoint canvas pattern, complete with color-coded stitch guides and downloadable outputs. Built with HTML, CSS, and JavaScript because why use many tools when few do trick?
 
