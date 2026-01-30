@@ -13,7 +13,7 @@ body {
 
 /* Sidebar */
 .sidebar {
-  width: 220px;
+  width: 250px;
   background: #16162a;
   border-right: 1px solid #333;
   padding: 15px;
@@ -26,6 +26,24 @@ body {
   margin: 0 0 15px 0;
   text-transform: uppercase;
   letter-spacing: 1px;
+}
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #333;
+}
+.sidebar-logo img {
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.sidebar-logo span {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.2;
 }
 .sidebar-empty {
   color: #555;
@@ -507,14 +525,16 @@ h1 {
 }
 .grid-wrapper {
   overflow: auto;
-  border: 2px solid #333;
-  border-radius: 8px;
-  background: #111;
   margin-bottom: 30px;
+  display: flex;
+  justify-content: center;
 }
 .grid {
   display: grid;
   gap: 0;
+  border: 2px solid #333;
+  border-radius: 8px;
+  overflow: hidden;
 }
 .cell {
   aspect-ratio: 1;
