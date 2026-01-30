@@ -1,6 +1,6 @@
 # Needlepoint Pattern Converter
 
-A web application that transforms any image into a needlepoint canvas pattern, complete with color-coded stitch guides and downloadable outputs.
+A web application that transforms any image into a needlepoint canvas pattern, complete with color-coded stitch guides and downloadable outputs. Built with HTML, CSS, and JavaScript because why use many tools when few do trick?
 
 **Live Demo:** [needlepointmaker.com](https://needlepointmaker.com/)
 
