@@ -148,6 +148,7 @@ body {
   flex: 1;
   padding: 20px;
   overflow-y: auto;
+  min-width: 0;
 }
 h1 {
   text-align: center;
@@ -526,11 +527,12 @@ h1 {
 .grid-wrapper {
   overflow: auto;
   margin-bottom: 30px;
-  display: flex;
-  justify-content: center;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 10px;
+  text-align: center;
 }
 .grid {
-  display: grid;
+  display: inline-grid;
   gap: 0;
   border: 2px solid #333;
   border-radius: 8px;
@@ -598,7 +600,7 @@ h2 {
 /* Download buttons */
 .download-section {
   display: none;
-  margin-top: 20px;
+  margin-bottom: 25px;
   text-align: center;
 }
 .download-section.visible {
@@ -616,4 +618,233 @@ h2 {
 }
 .download-btn:hover {
   background: #5a7a5a;
+}
+
+/* Mobile menu toggle button */
+.mobile-menu-toggle {
+  display: none;
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  z-index: 1001;
+  background: #4a6a8a;
+  border: none;
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  color: #fff;
+}
+.mobile-menu-toggle svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+.mobile-menu-toggle .close-icon {
+  display: none;
+}
+.mobile-menu-toggle.active .menu-icon {
+  display: none;
+}
+.mobile-menu-toggle.active .close-icon {
+  display: block;
+}
+
+/* Sidebar overlay for mobile */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+}
+.sidebar-overlay.visible {
+  display: block;
+}
+
+/* ================================
+   MOBILE RESPONSIVE STYLES
+   ================================ */
+@media (max-width: 768px) {
+  body {
+    flex-direction: column;
+  }
+  
+  /* Mobile menu toggle */
+  .mobile-menu-toggle {
+    display: block;
+  }
+  
+  /* Sidebar becomes a slide-out drawer */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 280px;
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    padding-top: 70px;
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  
+  /* Main content takes full width */
+  .main-content {
+    padding: 70px 15px 20px 15px;
+    width: 100%;
+  }
+  
+  /* Smaller heading on mobile */
+  h1 {
+    font-size: 24px;
+    margin-bottom: 5px;
+  }
+  .main-content > .container > p {
+    font-size: 14px;
+  }
+  
+  /* Upload section adjustments */
+  .upload-section {
+    padding: 20px 15px;
+  }
+  .upload-section h2 {
+    font-size: 18px;
+  }
+  
+  /* File dropzone */
+  .file-dropzone {
+    min-height: 150px;
+    padding: 20px;
+  }
+  .dropzone-text {
+    font-size: 16px;
+    text-align: center;
+  }
+  
+  /* Image selected row stacks vertically */
+  .image-selected-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .image-preview {
+    width: 80px;
+    height: 80px;
+  }
+  .selected-filename {
+    max-width: 100%;
+  }
+  
+  /* Size presets wrap better */
+  .size-presets {
+    gap: 6px;
+  }
+  .preset-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+    flex: 1 1 auto;
+    min-width: calc(50% - 6px);
+    text-align: center;
+  }
+  
+  /* Dimensions row stacks on mobile */
+  .dimensions-row {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .dimension-input {
+    flex: 1;
+    min-width: 80px;
+  }
+  .dimension-input input[type="number"] {
+    width: 100%;
+  }
+  .aspect-link-btn {
+    margin-top: 0;
+    align-self: flex-end;
+    margin-bottom: 4px;
+  }
+  
+  /* Full width inputs */
+  .step-group input[type="number"] {
+    width: 100%;
+    max-width: 150px;
+  }
+  
+  /* Convert button full width */
+  .convert-btn {
+    width: 100%;
+    padding: 15px;
+    font-size: 18px;
+  }
+  
+  /* Controls wrap on mobile */
+  .controls {
+    display: none;
+    flex-direction: column;
+    gap: 15px;
+    align-items: center;
+  }
+  .controls.visible {
+    display: flex;
+  }
+  .controls label {
+    margin-right: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .controls input[type="range"] {
+    width: 120px;
+  }
+  .controls button {
+    padding: 12px 20px;
+    font-size: 14px;
+    width: 100%;
+    max-width: 200px;
+  }
+  
+  /* Grid wrapper scrolls horizontally */
+  .grid-wrapper {
+    margin-left: -15px;
+    margin-right: -15px;
+    padding-left: 15px;
+    padding-right: 15px;
+  }
+  
+  /* Legend adjusts */
+  .legend {
+    grid-template-columns: 1fr;
+  }
+  
+  /* Download buttons stack */
+  .download-section {
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .download-section.visible {
+    display: flex;
+  }
+  .download-btn {
+    width: 100%;
+    margin: 0;
+    padding: 14px 20px;
+    font-size: 15px;
+  }
+}
+
+/* Small phone adjustments */
+@media (max-width: 380px) {
+  .preset-btn {
+    min-width: 100%;
+  }
+  .sidebar {
+    width: 100%;
+  }
 }

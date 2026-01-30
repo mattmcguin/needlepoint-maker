@@ -1047,4 +1047,45 @@ document.addEventListener('DOMContentLoaded', () => {
     a.download = `needlepoint_grid_${height}x${width}_${colors}colors_${cellSize}px.png`;
     a.click();
   });
+  
+  // ============================================
+  // MOBILE MENU TOGGLE
+  // ============================================
+  
+  const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+  const sidebar = document.getElementById('sidebar');
+  const sidebarOverlay = document.getElementById('sidebarOverlay');
+  
+  function openMobileMenu() {
+    sidebar.classList.add('open');
+    sidebarOverlay.classList.add('visible');
+    mobileMenuToggle.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+  
+  function closeMobileMenu() {
+    sidebar.classList.remove('open');
+    sidebarOverlay.classList.remove('visible');
+    mobileMenuToggle.classList.remove('active');
+    document.body.style.overflow = '';
+  }
+  
+  mobileMenuToggle.addEventListener('click', () => {
+    if (sidebar.classList.contains('open')) {
+      closeMobileMenu();
+    } else {
+      openMobileMenu();
+    }
+  });
+  
+  sidebarOverlay.addEventListener('click', closeMobileMenu);
+  
+  // Close sidebar when a project is selected on mobile
+  const originalLoadProject = loadProject;
+  loadProject = function(project) {
+    originalLoadProject(project);
+    if (window.innerWidth <= 768) {
+      closeMobileMenu();
+    }
+  };
 });

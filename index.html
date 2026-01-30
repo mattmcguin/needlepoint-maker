@@ -66,8 +66,24 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- Mobile Menu Toggle -->
+  <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Toggle menu">
+    <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+    <svg class="close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="18" y1="6" x2="6" y2="18"></line>
+      <line x1="6" y1="6" x2="18" y2="18"></line>
+    </svg>
+  </button>
+  
+  <!-- Sidebar Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  
   <!-- Sidebar -->
-  <div class="sidebar">
+  <div class="sidebar" id="sidebar">
     <div class="sidebar-logo">
       <img src="images/logo.png" alt="Needlepoint Maker" width="60" height="60">
       <span>Needlepoint Maker</span>
@@ -165,12 +181,6 @@
     <!-- Result Section -->
     <div class="result-section" id="resultSection">
       <p class="pattern-info" id="patternInfo"></p>
-      <div class="grid-wrapper">
-        <div class="grid" id="grid"></div>
-      </div>
-      
-      <h2>Color Legend</h2>
-      <div class="legend" id="legend"></div>
       
       <div class="download-section" id="downloadSection">
         <button class="download-btn" id="downloadGrid">Download Grid CSV</button>
@@ -178,6 +188,13 @@
         <button class="download-btn" id="downloadPng">Download Preview PNG</button>
         <button class="download-btn" id="downloadGridImage">Download Grid Image</button>
       </div>
+      
+      <div class="grid-wrapper">
+        <div class="grid" id="grid"></div>
+      </div>
+      
+      <h2>Color Legend</h2>
+      <div class="legend" id="legend"></div>
     </div>
   </div>
   </div>
