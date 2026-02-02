@@ -175,7 +175,7 @@ function processImage(img, targetHeight, targetWidth, maxColors) {
   const sortedColors = [...colorCounts.entries()]
     .sort((a, b) => b[1] - a[1])
     .map(([hex, count], idx) => ({
-      code: `C${String(idx + 1).padStart(2, '0')}`,
+      code: String(idx + 1).padStart(2, '0'),
       hex,
       count
     }));
