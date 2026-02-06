@@ -646,13 +646,24 @@ h1 {
   content: "";
   position: absolute;
   inset: 0;
-  background: repeating-linear-gradient(
-    45deg,
-    rgba(255, 255, 255, 0.35),
-    rgba(255, 255, 255, 0.35) 3px,
-    rgba(0, 0, 0, 0.25) 3px,
-    rgba(0, 0, 0, 0.25) 6px
-  );
+  background:
+    linear-gradient(45deg,
+      transparent 44%,
+      rgba(230, 70, 70, 0.95) 45%,
+      rgba(230, 70, 70, 0.95) 55%,
+      transparent 56%),
+    linear-gradient(-45deg,
+      transparent 44%,
+      rgba(230, 70, 70, 0.95) 45%,
+      rgba(230, 70, 70, 0.95) 55%,
+      transparent 56%);
+  pointer-events: none;
+}
+.cell.completed::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
   pointer-events: none;
 }
 .cell:hover {
