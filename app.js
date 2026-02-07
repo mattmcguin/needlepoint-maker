@@ -219,6 +219,9 @@ let selectedLegendCode = null;
 let completedCells = new Set();
 let actionHistory = [];
 const MAX_UNDO_HISTORY = 500;
+let interactionMode = 'progress';
+let paintColorCode = '1';
+let updatePaintControls = null;
 
 // Size presets for common needlepoint projects (in stitches at 18 mesh)
 const SIZE_PRESETS = [
@@ -371,6 +374,10 @@ function renderLegend() {
     `;
     legendEl.appendChild(item);
   }
+  
+  if (typeof updatePaintControls === 'function') {
+    updatePaintControls();
+  }
 }
 
 function showStatus(message, type) {
@@ -483,61 +490,10 @@ function renderGridToCanvas(cellSize) {
 const STORAGE_KEY = 'needlepoint_projects';
 const SIDEBAR_COLLAPSED_KEY = 'needlepoint_sidebar_collapsed';
 
-function migrateProjectCodes(project) {
-  if (!project || !project.grid || !project.colorMap) return { project, changed: false };
-  
-  const codes = Object.keys(project.colorMap);
-  const hasPadded = codes.some(code => /^0\d+$/.test(code));
-  if (!hasPadded) return { project, changed: false };
-  
-  const codeMap = new Map();
-  codes.forEach(code => {
-    const normalized = String(parseInt(code, 10));
-    codeMap.set(code, normalized);
-  });
-  
-  const nextColorMap = {};
-  const nextColorCounts = {};
-  codes.forEach(code => {
-    const nextCode = codeMap.get(code);
-    nextColorMap[nextCode] = project.colorMap[code];
-    if (project.colorCounts && project.colorCounts[code] !== undefined) {
-      nextColorCounts[nextCode] = project.colorCounts[code];
-    }
-  });
-  
-  const nextGrid = project.grid.map(row => row.map(code => codeMap.get(code) || code));
-  
-  return {
-    project: {
-      ...project,
-      grid: nextGrid,
-      colorMap: nextColorMap,
-      colorCounts: Object.keys(nextColorCounts).length ? nextColorCounts : project.colorCounts
-    },
-    changed: true
-  };
-}
-
-function migrateProjects(projects) {
-  let changed = false;
-  const nextProjects = projects.map(project => {
-    const result = migrateProjectCodes(project);
-    if (result.changed) changed = true;
-    return result.project;
-  });
-  return { projects: nextProjects, changed };
-}
-
 function getProjects() {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
-    const projects = data ? JSON.parse(data) : [];
-    const migrated = migrateProjects(projects);
-    if (migrated.changed) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated.projects));
-    }
-    return migrated.projects;
+    return data ? JSON.parse(data) : [];
   } catch (e) {
     return [];
   }
@@ -719,6 +675,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
   const sidebarEl = document.getElementById('sidebar');
   const colorContextMenu = document.getElementById('colorContextMenu');
+  const progressModeBtn = document.getElementById('progressModeBtn');
+  const paintModeBtn = document.getElementById('paintModeBtn');
+  const paintControls = document.getElementById('paintControls');
+  const paintColorLabel = document.getElementById('paintColorLabel');
+  const paintSwatch = document.getElementById('paintSwatch');
   
   let loadedImage = null;
   let currentFileName = 'Untitled';
@@ -1107,6 +1068,8 @@ document.addEventListener('DOMContentLoaded', () => {
     selectedLegendCode = null;
     completedCells = new Set();
     actionHistory = [];
+    interactionMode = 'progress';
+    paintColorCode = '1';
     convertBtn.disabled = true;
     imageAspectRatio = null;
     
@@ -1150,6 +1113,8 @@ document.addEventListener('DOMContentLoaded', () => {
     sidebarToggleBtn.setAttribute('aria-label', isCollapsed ? 'Expand sidebar' : 'Collapse sidebar');
     const labelSpan = sidebarToggleBtn.querySelector('span');
     if (labelSpan) labelSpan.textContent = isCollapsed ? 'Expand' : 'Collapse';
+    updateModeBarOffset();
+    setTimeout(updateModeBarOffset, 220);
   }
   
   if (sidebarToggleBtn) {
@@ -1162,6 +1127,30 @@ document.addEventListener('DOMContentLoaded', () => {
       const isCollapsed = !sidebarEl.classList.contains('collapsed');
       setSidebarCollapsed(isCollapsed);
       localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(isCollapsed));
+    });
+  }
+
+  function updateModeBarOffset() {
+    const root = document.documentElement;
+    if (!sidebarEl) {
+      root.style.setProperty('--sidebar-offset', '0px');
+      return;
+    }
+    if (window.innerWidth <= 768) {
+      root.style.setProperty('--sidebar-offset', '0px');
+      return;
+    }
+    const sidebarWidth = sidebarEl.getBoundingClientRect().width;
+    root.style.setProperty('--sidebar-offset', `${sidebarWidth}px`);
+  }
+
+  updateModeBarOffset();
+  window.addEventListener('resize', updateModeBarOffset);
+  if (sidebarEl) {
+    sidebarEl.addEventListener('transitionend', (e) => {
+      if (e.propertyName === 'width') {
+        updateModeBarOffset();
+      }
     });
   }
   
@@ -1184,6 +1173,8 @@ document.addEventListener('DOMContentLoaded', () => {
     selectedLegendCode = null;
     completedCells = new Set();
     actionHistory = [];
+    interactionMode = 'progress';
+    paintColorCode = '1';
     
     // Reset UI - hide results until convert is clicked
     document.getElementById('controls').classList.remove('visible');
@@ -1324,6 +1315,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         completedCells = new Set(preservedCompletedCells);
         actionHistory = [];
+        interactionMode = 'progress';
         
         // Update pattern info with both stitches and inches
         const widthInches = stitchesToInches(width);
@@ -1521,6 +1513,7 @@ document.addEventListener('DOMContentLoaded', () => {
       selectedLegendCode = null;
       completedCells = new Set(project.completedCells || []);
       actionHistory = [];
+      interactionMode = 'progress';
       
       // Update preset availability and labels based on image aspect ratio
       updatePresetAvailability();
@@ -1729,6 +1722,88 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
   }
+
+  function setInteractionMode(mode) {
+    interactionMode = mode;
+    if (progressModeBtn && paintModeBtn && paintControls) {
+      progressModeBtn.classList.toggle('active', mode === 'progress');
+      paintModeBtn.classList.toggle('active', mode === 'paint');
+      paintControls.classList.toggle('visible', mode === 'paint');
+    }
+    const modeBar = document.getElementById('modeBar');
+    if (modeBar) {
+      modeBar.classList.toggle('paint-active', mode === 'paint');
+    }
+  }
+
+  updatePaintControls = function () {
+    if (!currentResult || !paintSwatch) return;
+    const codes = Object.keys(currentResult.colorMap).sort((a, b) => parseInt(a) - parseInt(b));
+    if (codes.length === 0) return;
+    const shouldReset = !codes.includes(paintColorCode);
+    if (shouldReset) {
+      paintColorCode = codes.includes('1') ? '1' : codes[0];
+    }
+
+    if (paintColorLabel) {
+      paintColorLabel.textContent = paintColorCode;
+    }
+    paintSwatch.style.background = currentResult.colorMap[paintColorCode];
+  };
+
+  if (progressModeBtn && paintModeBtn) {
+    progressModeBtn.addEventListener('click', () => setInteractionMode('progress'));
+    paintModeBtn.addEventListener('click', () => setInteractionMode('paint'));
+    setInteractionMode('progress');
+  }
+
+  function showPaintColorMenu(x, y) {
+    if (!currentResult || !colorContextMenu) return;
+    const { colorMap } = currentResult;
+    const codes = Object.keys(colorMap).sort((a, b) => parseInt(a) - parseInt(b));
+    colorContextMenu.innerHTML = `
+      <div class="color-context-title">Paint Color</div>
+      <div class="color-context-grid">
+        ${codes.map(code => `
+          <div class="color-context-item ${code === paintColorCode ? 'active' : ''}" data-code="${code}">
+            <span class="color-context-swatch" style="background:${colorMap[code]}"></span>
+            <span>${code}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    
+    colorContextMenu.classList.add('visible');
+    colorContextMenu.setAttribute('aria-hidden', 'false');
+    
+    const menuRect = colorContextMenu.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const left = Math.min(x, viewportWidth - menuRect.width - 8);
+    const top = Math.max(8, y - menuRect.height);
+    
+    colorContextMenu.style.left = `${Math.max(8, left)}px`;
+    colorContextMenu.style.top = `${Math.max(8, top)}px`;
+    
+    colorContextMenu.querySelectorAll('.color-context-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const nextCode = item.dataset.code;
+        if (!nextCode) return;
+        paintColorCode = nextCode;
+        if (paintColorLabel) paintColorLabel.textContent = paintColorCode;
+        if (paintSwatch) paintSwatch.style.background = currentResult.colorMap[paintColorCode];
+        hideColorContextMenu();
+      });
+    });
+  }
+
+  if (paintControls) {
+    paintControls.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const rect = paintControls.getBoundingClientRect();
+      showPaintColorMenu(rect.left, rect.top - 6);
+    });
+  }
   
   gridEl.addEventListener('click', (e) => {
     if (colorContextMenu && colorContextMenu.classList.contains('visible')) {
@@ -1739,6 +1814,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!cell || !cell.dataset.index) return;
     const index = parseInt(cell.dataset.index, 10);
     if (Number.isNaN(index)) return;
+    
+    if (interactionMode === 'paint') {
+      const cols = currentResult.grid[0].length;
+      const rowIdx = Math.floor(index / cols);
+      const colIdx = index % cols;
+      const currentCode = currentResult.grid[rowIdx][colIdx];
+      if (paintColorCode && currentCode !== paintColorCode) {
+        updateColorCounts(currentCode, paintColorCode);
+        applyColorChange(rowIdx, colIdx, paintColorCode);
+        pushAction({
+          type: 'color',
+          rowIdx,
+          colIdx,
+          prevCode: currentCode,
+          nextCode: paintColorCode
+        });
+      }
+      return;
+    }
     
     if (completedCells.has(index)) {
       pushAction({ type: 'complete', index, prevCompleted: true });
