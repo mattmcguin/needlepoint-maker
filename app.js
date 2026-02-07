@@ -217,6 +217,8 @@ let unitMode = 'inches'; // 'inches' or 'stitches'
 let currentProjectId = null;
 let selectedLegendCode = null;
 let completedCells = new Set();
+let actionHistory = [];
+const MAX_UNDO_HISTORY = 500;
 
 // Size presets for common needlepoint projects (in stitches at 18 mesh)
 const SIZE_PRESETS = [
@@ -654,6 +656,7 @@ function loadProject(project) {
   };
   selectedLegendCode = null;
   completedCells = new Set(project.completedCells || []);
+  actionHistory = [];
   
   // Set current project ID for editing
   currentProjectId = project.id;
@@ -715,6 +718,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const gridEl = document.getElementById('grid');
   const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
   const sidebarEl = document.getElementById('sidebar');
+  const colorContextMenu = document.getElementById('colorContextMenu');
   
   let loadedImage = null;
   let currentFileName = 'Untitled';
@@ -1102,6 +1106,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentProjectId = null;
     selectedLegendCode = null;
     completedCells = new Set();
+    actionHistory = [];
     convertBtn.disabled = true;
     imageAspectRatio = null;
     
@@ -1178,6 +1183,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentProjectId = null;
     selectedLegendCode = null;
     completedCells = new Set();
+    actionHistory = [];
     
     // Reset UI - hide results until convert is clicked
     document.getElementById('controls').classList.remove('visible');
@@ -1317,6 +1323,7 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }
         completedCells = new Set(preservedCompletedCells);
+        actionHistory = [];
         
         // Update pattern info with both stitches and inches
         const widthInches = stitchesToInches(width);
@@ -1513,6 +1520,7 @@ document.addEventListener('DOMContentLoaded', () => {
       currentFileName = project.name;
       selectedLegendCode = null;
       completedCells = new Set(project.completedCells || []);
+      actionHistory = [];
       
       // Update preset availability and labels based on image aspect ratio
       updatePresetAvailability();
@@ -1574,23 +1582,205 @@ document.addEventListener('DOMContentLoaded', () => {
     projects[idx].completedCells = [...completedCells];
     saveProjects(projects);
   }
+
+  function persistProjectUpdate(updates) {
+    if (!currentProjectId) return;
+    const projects = getProjects();
+    const idx = projects.findIndex(p => p.id === currentProjectId);
+    if (idx === -1) return;
+    projects[idx] = { ...projects[idx], ...updates };
+    saveProjects(projects);
+  }
+
+  function pushAction(action) {
+    actionHistory.push(action);
+    if (actionHistory.length > MAX_UNDO_HISTORY) {
+      actionHistory.shift();
+    }
+  }
+
+  function getCellElementByIndex(index) {
+    if (!gridEl) return null;
+    return gridEl.children[index] || null;
+  }
+
+  function applyCompletion(index, shouldBeCompleted) {
+    if (shouldBeCompleted) {
+      completedCells.add(index);
+    } else {
+      completedCells.delete(index);
+    }
+    const cell = getCellElementByIndex(index);
+    if (cell) {
+      cell.classList.toggle('completed', shouldBeCompleted);
+    }
+    persistCompletedCells();
+  }
+
+  function applyColorChange(rowIdx, colIdx, nextCode) {
+    const cols = currentResult.grid[0].length;
+    const index = rowIdx * cols + colIdx;
+    const cell = getCellElementByIndex(index);
+    currentResult.grid[rowIdx][colIdx] = nextCode;
+    updateCellElement(cell, nextCode, rowIdx, colIdx);
+    renderLegend();
+    persistProjectUpdate({ grid: currentResult.grid, colorCounts: currentResult.colorCounts });
+  }
+
+  function undoLastAction() {
+    const action = actionHistory.pop();
+    if (!action) return;
+    
+    if (action.type === 'complete') {
+      applyCompletion(action.index, action.prevCompleted);
+      return;
+    }
+    
+    if (action.type === 'color') {
+      updateColorCounts(action.nextCode, action.prevCode);
+      applyColorChange(action.rowIdx, action.colIdx, action.prevCode);
+    }
+  }
+
+  function updateCellElement(cell, code, rowIdx, colIdx) {
+    if (!cell) return;
+    const hex = currentResult.colorMap[code];
+    cell.dataset.code = code;
+    cell.style.backgroundColor = hex;
+    cell.style.color = getTextColor(hex);
+    cell.textContent = showCodes ? code : '';
+    cell.title = `Row ${rowIdx + 1}, Col ${colIdx + 1}\n${code}: ${hex}`;
+    
+    if (selectedLegendCode) {
+      if (code === selectedLegendCode) {
+        cell.classList.add('highlight');
+        cell.classList.remove('dimmed');
+      } else {
+        cell.classList.add('dimmed');
+        cell.classList.remove('highlight');
+      }
+    } else {
+      cell.classList.remove('dimmed');
+      cell.classList.remove('highlight');
+    }
+  }
+
+  function updateColorCounts(oldCode, newCode) {
+    if (!currentResult.colorCounts) currentResult.colorCounts = {};
+    currentResult.colorCounts[oldCode] = Math.max(0, (currentResult.colorCounts[oldCode] || 0) - 1);
+    currentResult.colorCounts[newCode] = (currentResult.colorCounts[newCode] || 0) + 1;
+  }
+
+  function hideColorContextMenu() {
+    if (!colorContextMenu) return;
+    colorContextMenu.classList.remove('visible');
+    colorContextMenu.setAttribute('aria-hidden', 'true');
+    colorContextMenu.innerHTML = '';
+  }
+
+  function showColorContextMenu(x, y, cell, rowIdx, colIdx) {
+    if (!currentResult || !colorContextMenu) return;
+    const { colorMap } = currentResult;
+    const currentCode = cell.dataset.code;
+    
+    const codes = Object.keys(colorMap).sort((a, b) => parseInt(a) - parseInt(b));
+    colorContextMenu.innerHTML = `
+      <div class="color-context-title">Set Color</div>
+      <div class="color-context-grid">
+        ${codes.map(code => `
+          <div class="color-context-item ${code === currentCode ? 'active' : ''}" data-code="${code}">
+            <span class="color-context-swatch" style="background:${colorMap[code]}"></span>
+            <span>${code}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    
+    colorContextMenu.classList.add('visible');
+    colorContextMenu.setAttribute('aria-hidden', 'false');
+    
+    const menuRect = colorContextMenu.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const left = Math.min(x, viewportWidth - menuRect.width - 8);
+    const top = Math.min(y, viewportHeight - menuRect.height - 8);
+    
+    colorContextMenu.style.left = `${Math.max(8, left)}px`;
+    colorContextMenu.style.top = `${Math.max(8, top)}px`;
+    
+    colorContextMenu.querySelectorAll('.color-context-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const nextCode = item.dataset.code;
+        if (!nextCode || nextCode === currentCode) {
+          hideColorContextMenu();
+          return;
+        }
+        
+        updateColorCounts(currentCode, nextCode);
+        applyColorChange(rowIdx, colIdx, nextCode);
+        pushAction({
+          type: 'color',
+          rowIdx,
+          colIdx,
+          prevCode: currentCode,
+          nextCode
+        });
+        hideColorContextMenu();
+      });
+    });
+  }
   
   gridEl.addEventListener('click', (e) => {
+    if (colorContextMenu && colorContextMenu.classList.contains('visible')) {
+      hideColorContextMenu();
+      return;
+    }
     const cell = e.target.closest('.cell');
     if (!cell || !cell.dataset.index) return;
     const index = parseInt(cell.dataset.index, 10);
     if (Number.isNaN(index)) return;
     
     if (completedCells.has(index)) {
-      completedCells.delete(index);
-      cell.classList.remove('completed');
+      pushAction({ type: 'complete', index, prevCompleted: true });
+      applyCompletion(index, false);
     } else {
-      completedCells.add(index);
-      cell.classList.add('completed');
+      pushAction({ type: 'complete', index, prevCompleted: false });
+      applyCompletion(index, true);
     }
-    
-    persistCompletedCells();
   });
+  
+  gridEl.addEventListener('contextmenu', (e) => {
+    const cell = e.target.closest('.cell');
+    if (!cell || !cell.dataset.index) return;
+    e.preventDefault();
+    const index = parseInt(cell.dataset.index, 10);
+    if (Number.isNaN(index)) return;
+    const cols = currentResult.grid[0].length;
+    const rowIdx = Math.floor(index / cols);
+    const colIdx = index % cols;
+    showColorContextMenu(e.clientX, e.clientY, cell, rowIdx, colIdx);
+  });
+  
+  document.addEventListener('click', (e) => {
+    if (!colorContextMenu || !colorContextMenu.classList.contains('visible')) return;
+    if (!e.target.closest('#colorContextMenu')) {
+      hideColorContextMenu();
+    }
+  });
+  
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') hideColorContextMenu();
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      if (colorContextMenu && colorContextMenu.classList.contains('visible')) {
+        hideColorContextMenu();
+        return;
+      }
+      undoLastAction();
+    }
+  });
+  
+  window.addEventListener('resize', hideColorContextMenu);
   
   // ============================================
   // MOBILE MENU TOGGLE

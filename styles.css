@@ -810,6 +810,65 @@ h2 {
   margin-top: 0;
 }
 
+/* Color context menu */
+.color-context-menu {
+  position: fixed;
+  min-width: 200px;
+  max-width: 280px;
+  max-height: 320px;
+  overflow: auto;
+  background: #1f1f36;
+  border: 1px solid #3a3a5a;
+  border-radius: 10px;
+  padding: 8px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  z-index: 2000;
+  display: none;
+}
+.color-context-menu.visible {
+  display: block;
+}
+.color-context-title {
+  font-size: 11px;
+  color: #9aa3c4;
+  margin: 4px 6px 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.color-context-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.color-context-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  background: #2a2a4a;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #e6ebff;
+  font-size: 12px;
+  transition: background 0.2s, border-color 0.2s;
+}
+.color-context-item:hover {
+  background: #34345a;
+  border-color: #4a5a7a;
+}
+.color-context-item.active {
+  border-color: #8ab4f8;
+  box-shadow: 0 0 0 1px rgba(138, 180, 248, 0.4);
+}
+.color-context-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  flex-shrink: 0;
+}
+
 /* Download buttons */
 .download-section {
   display: none;
