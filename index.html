@@ -88,10 +88,20 @@
       <img src="images/logo.png" alt="Needlepoint Maker" width="60" height="60">
       <span>Needlepoint Maker</span>
     </div>
-    <button class="new-project-btn" id="newProjectBtn">+ New Project</button>
+    <button class="new-project-btn" id="newProjectBtn">
+      <span class="btn-icon" aria-hidden="true">+</span>
+      <span class="btn-text">New Project</span>
+    </button>
     <h2>Projects</h2>
     <div class="project-list" id="projectList"></div>
-    <button class="clear-all-btn" id="clearAllBtn" style="display:none;">Clear All Projects</button>
+    <div class="sidebar-footer">
+      <button class="sidebar-toggle-btn" id="sidebarToggleBtn" aria-label="Collapse sidebar">
+        <svg class="sidebar-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M15 6l-6 6 6 6"/>
+        </svg>
+        <span>Collapse</span>
+      </button>
+    </div>
   </div>
   
   <!-- Main Content -->

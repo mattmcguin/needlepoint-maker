@@ -175,7 +175,7 @@ function processImage(img, targetHeight, targetWidth, maxColors) {
   const sortedColors = [...colorCounts.entries()]
     .sort((a, b) => b[1] - a[1])
     .map(([hex, count], idx) => ({
-      code: String(idx + 1).padStart(2, '0'),
+      code: String(idx + 1),
       hex,
       count
     }));
@@ -479,11 +479,63 @@ function renderGridToCanvas(cellSize) {
 // ============================================
 
 const STORAGE_KEY = 'needlepoint_projects';
+const SIDEBAR_COLLAPSED_KEY = 'needlepoint_sidebar_collapsed';
+
+function migrateProjectCodes(project) {
+  if (!project || !project.grid || !project.colorMap) return { project, changed: false };
+  
+  const codes = Object.keys(project.colorMap);
+  const hasPadded = codes.some(code => /^0\d+$/.test(code));
+  if (!hasPadded) return { project, changed: false };
+  
+  const codeMap = new Map();
+  codes.forEach(code => {
+    const normalized = String(parseInt(code, 10));
+    codeMap.set(code, normalized);
+  });
+  
+  const nextColorMap = {};
+  const nextColorCounts = {};
+  codes.forEach(code => {
+    const nextCode = codeMap.get(code);
+    nextColorMap[nextCode] = project.colorMap[code];
+    if (project.colorCounts && project.colorCounts[code] !== undefined) {
+      nextColorCounts[nextCode] = project.colorCounts[code];
+    }
+  });
+  
+  const nextGrid = project.grid.map(row => row.map(code => codeMap.get(code) || code));
+  
+  return {
+    project: {
+      ...project,
+      grid: nextGrid,
+      colorMap: nextColorMap,
+      colorCounts: Object.keys(nextColorCounts).length ? nextColorCounts : project.colorCounts
+    },
+    changed: true
+  };
+}
+
+function migrateProjects(projects) {
+  let changed = false;
+  const nextProjects = projects.map(project => {
+    const result = migrateProjectCodes(project);
+    if (result.changed) changed = true;
+    return result.project;
+  });
+  return { projects: nextProjects, changed };
+}
 
 function getProjects() {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
+    const projects = data ? JSON.parse(data) : [];
+    const migrated = migrateProjects(projects);
+    if (migrated.changed) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated.projects));
+    }
+    return migrated.projects;
   } catch (e) {
     return [];
   }
@@ -524,21 +576,18 @@ function addProject(project) {
 }
 
 function deleteProject(id) {
-  const projects = getProjects().filter(p => p.id !== id);
-  saveProjects(projects);
+  const projects = getProjects();
+  const project = projects.find(p => p.id === id);
+  const name = project?.name || 'this project';
+  if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
+  
+  const nextProjects = projects.filter(p => p.id !== id);
+  saveProjects(nextProjects);
   renderProjectList();
-}
-
-function clearAllProjects() {
-  if (confirm('Delete all saved projects?')) {
-    saveProjects([]);
-    renderProjectList();
-  }
 }
 
 function renderProjectList() {
   const listEl = document.getElementById('projectList');
-  const clearBtn = document.getElementById('clearAllBtn');
   const projects = getProjects();
   
   listEl.innerHTML = '';
@@ -548,11 +597,8 @@ function renderProjectList() {
     emptyEl.className = 'sidebar-empty';
     emptyEl.textContent = 'No projects yet';
     listEl.appendChild(emptyEl);
-    clearBtn.style.display = 'none';
     return;
   }
-  
-  clearBtn.style.display = 'block';
   
   projects.forEach(project => {
     const item = document.createElement('div');
@@ -664,10 +710,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const downloadLegendBtn = document.getElementById('downloadLegend');
   const downloadPngBtn = document.getElementById('downloadPng');
   const downloadGridImageBtn = document.getElementById('downloadGridImage');
-  const clearAllBtn = document.getElementById('clearAllBtn');
   const newProjectBtn = document.getElementById('newProjectBtn');
   const legendEl = document.getElementById('legend');
   const gridEl = document.getElementById('grid');
+  const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
+  const sidebarEl = document.getElementById('sidebar');
   
   let loadedImage = null;
   let currentFileName = 'Untitled';
@@ -856,8 +903,6 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Load existing projects on startup
   renderProjectList();
-  
-  clearAllBtn.addEventListener('click', clearAllProjects);
   
   // Aspect ratio checkbox handler
   aspectLinkCheckbox.addEventListener('change', () => {
@@ -1093,6 +1138,27 @@ document.addEventListener('DOMContentLoaded', () => {
     // Clear active project highlight
     document.querySelectorAll('.project-item').forEach(el => el.classList.remove('active'));
   });
+
+  function setSidebarCollapsed(isCollapsed) {
+    if (!sidebarEl || !sidebarToggleBtn) return;
+    sidebarEl.classList.toggle('collapsed', isCollapsed);
+    sidebarToggleBtn.setAttribute('aria-label', isCollapsed ? 'Expand sidebar' : 'Collapse sidebar');
+    const labelSpan = sidebarToggleBtn.querySelector('span');
+    if (labelSpan) labelSpan.textContent = isCollapsed ? 'Expand' : 'Collapse';
+  }
+  
+  if (sidebarToggleBtn) {
+    const storedCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+    if (storedCollapsed === 'true') {
+      setSidebarCollapsed(true);
+    }
+    
+    sidebarToggleBtn.addEventListener('click', () => {
+      const isCollapsed = !sidebarEl.classList.contains('collapsed');
+      setSidebarCollapsed(isCollapsed);
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(isCollapsed));
+    });
+  }
   
   imageInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
