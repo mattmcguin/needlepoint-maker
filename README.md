@@ -60,7 +60,7 @@ xdg-open index.html
 4. Adjust **Dimensions** if needed:
    - Toggle between Inches and Stitches units
    - Enable/disable aspect ratio lock
-5. Set **Max Colors** for the palette (default auto-detected based on image complexity)
+5. Set **Maximum colors** as a ceiling. The converter automatically uses fewer thread colors when additional shades add little detail.
 6. Click **Convert**
 
 ### Viewing Results
@@ -98,16 +98,18 @@ The application selects a palette in [Oklab perceptual color space](https://bott
 
 1. Sample the original image at up to 512 pixels on its longest edge, compositing transparency onto white. Select colors before resizing to stitches so small accents are not lost to blending.
 2. Group nearby source colors in a bounded histogram, then choose deterministic seeds using visual distance and square-root frequency. This balances dominant colors with smaller, distinct accents.
-3. Refine the palette using pixel-weighted clustering. Preserve exact colors when the source already fits the requested limit.
+3. Try progressively larger palettes, refining each with pixel-weighted clustering. Stop at the smallest palette that meets the perceptual fidelity budget, up to the requested ceiling. Near-identical shades can share a thread; distinct flat colors stay separate.
 4. Check for supported hue families absent from the palette. Replace a redundant nearby shade when possible, while protecting the dominant color, highlights, shadows, and hues already represented.
 5. Resize the image to the stitch grid and map pixels to the nearest palette color in Oklab, emphasizing hue to avoid mapping skin tones or accents onto unrelated background colors. Cache repeated mappings and count only colors actually used.
+
+Palette sizing checks both source colors and the resulting stitch grid, so resampling blends and compression texture do not force extra threads. The quality budget is a practical heuristic, not a mathematically unique optimum. The Christmas ornament uses six or seven colors under a ceiling of 30; photographs can use more.
 
 Existing saved patterns keep their palettes until the user converts them again. Very fine details still depend on stitch resolution and the selected color limit.
 
 Run the dependency-free regression tests with:
 
 ```bash
-node --test tests/color-quantization.test.cjs
+node --test tests/*.test.cjs
 ```
 
 For the broader visual suite, serve the repository locally and open
@@ -115,6 +117,13 @@ For the broader visual suite, serve the repository locally and open
 It generates 19 deterministic patterns and tests four saved image fixtures plus
 the existing bear artwork at three stitch sizes and eight color limits. An
 optional `?baseline=/path/to/previous-app.js` adds before/after comparisons.
+
+[`tests/paired-pattern-validation.html`](tests/paired-pattern-validation.html)
+compares eight original target grids against clean, shaded, lit, and JPEG source
+variants. It scores stitch classification, perceptual color error, and thread
+count at the intended budget and ceilings of 30 and 64. Source/reference provenance
+and the external chart check are documented in
+[`docs/implementation/adaptive-palette-validation.md`](docs/implementation/adaptive-palette-validation.md).
 
 ### Mesh Count Conversion
 

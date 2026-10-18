@@ -43,11 +43,14 @@ test('a small accent survives shaded artwork with a dominant green background', 
   assertOrnamentPalette(plain(buildPalette(pixels, 4)));
 });
 
-test('simple artwork keeps its exact colors, including nearby shades', () => {
+test('simple artwork combines near-identical shades and preserves distinct colors', () => {
   const colors = [[255, 255, 255], [20, 80, 30], [21, 81, 31], [220, 30, 40]];
   const pixels = colors.flatMap(color => repeat(color, 30));
   const palette = plain(buildPalette(pixels, 64));
-  assert.deepEqual(palette.sort(), colors.sort());
+  assert.equal(palette.length, 3);
+  assert.ok(palette.some(isWhite));
+  assert.ok(palette.some(isRed));
+  assert.equal(palette.filter(isGreen).length, 1);
   assert.deepEqual(plain(buildPalette(repeat([42, 90, 123], 500), 4)), [[42, 90, 123]]);
   assert.deepEqual(plain(buildPalette([], 4)), []);
 });
@@ -135,4 +138,29 @@ test('dark skin pixels map to a skin color instead of a blue background', () => 
   targetCanvas = canvasWith([[103, 67, 45], [90, 65, 48], [98, 62, 43], [165, 108, 78]]);
   const result = plain(processImage({ naturalWidth: 20, naturalHeight: 20 }, 2, 2, 4));
   assert.deepEqual(Object.values(result.colorMap), ['#A56C4E']);
+});
+
+
+test('the color ceiling does not inflate the ornament palette', () => {
+  const low = plain(buildPalette(ornament, 4));
+  assertOrnamentPalette(low);
+  const automatic = plain(buildPalette(ornament, 30));
+  assert.ok(automatic.length >= 6 && automatic.length <= 7);
+  assert.ok(automatic.some(isRed) && automatic.some(isWhite));
+  assert.deepEqual(plain(buildPalette(ornament, 64)), automatic);
+  assert.deepEqual(plain(buildPalette(ornament, automatic.length)), automatic);
+});
+
+test('automatic palette sizing distinguishes simple art from detailed photographs', () => {
+  const fixture = generatedImages.find(image => image.name === 'portrait-photo');
+  const pixels = fixture.histogram.flatMap(([r, g, b, count]) => repeat([r, g, b], count));
+  const palette = plain(buildPalette(pixels, 30));
+  assert.ok(palette.length > 7 && palette.length < 30);
+});
+
+test('grayscale shading uses fewer colors than a generous ceiling without collapsing to a flat fill', () => {
+  const pixels = Array.from({ length: 256 }, (_, i) => [i, i, i]);
+  const palette = plain(buildPalette(pixels, 30));
+  assert.ok(palette.length > 4 && palette.length < 20);
+  for (const rgb of palette) assert.ok(Math.max(...rgb) - Math.min(...rgb) <= 1);
 });

@@ -89,7 +89,7 @@
   });
   add('Nearby colors in one RGB histogram bin', ctx => {
     ['#505452', '#515553', '#535755', '#565A58'].forEach((color, i) => fill(ctx, color, i * 128, 0, 128, 512));
-  }, { check: (palette, limit) => limit < 4 ? [] : [expect(palette.length === 4, 'Keep nearby exact colors when they fit')] });
+  }, { check: (palette, limit) => limit < 4 ? [] : [expect(palette.length < 4, 'Combine nearby shades instead of filling the color ceiling')] });
   add('Single solid teal', ctx => fill(ctx, '#248C88', 0, 0, 512, 512), {
     check: palette => [expect(palette.length === 1, 'Do not invent extra shades for a solid image')]
   });
@@ -157,7 +157,7 @@
   for (const fixture of fixtures) {
     const row = { name: fixture.name, checks: 0, failures: [], results: [], visuals: [] };
     for (const size of [52, 72, 144]) {
-      for (const limit of [2, 3, 4, 6, 8, 16, 32, 64]) {
+      for (const limit of [2, 3, 4, 6, 8, 16, 30, 64]) {
         const { result, ms, targetWidth, targetHeight } = render(process, fixture, size, limit);
         output.runs++; output.timings.push(ms);
         const palette = paletteOf(result);
@@ -176,6 +176,11 @@
           const failure = `${fixture.name}, ${size} stitches, ${limit} colors: ${check.description}`;
           output.failures.push(failure); row.failures.push(failure);
         }
+        if (fixture.name === 'Customer Christmas ornament' && limit >= 8) {
+          const check = expect(result.numColors >= 6 && result.numColors <= 7, 'Use six or seven colors under a generous ceiling');
+          output.checks++; row.checks++;
+          if (!check.pass) { const failure = `${fixture.name}, ${size} stitches, ${limit} colors: ${check.description}`; output.failures.push(failure); row.failures.push(failure); }
+        }
         row.results.push({ size, limit, ms: Math.round(ms * 10) / 10, actual: result.numColors, palette: result.colorMap });
       }
     }
@@ -185,11 +190,11 @@
     let original;
     if (fixture.image instanceof HTMLCanvasElement) original = fixture.image.toDataURL(); else original = fixture.image.src;
     images.append(figure('Original', original, null, true));
-    for (const limit of [4, 8]) {
+    for (const limit of [4, 30]) {
       for (const [label, processor] of [['Before', baseline], ['After', process]]) {
         if (!processor) continue;
         const { result } = render(processor, fixture, 144, limit); const png = canvas.toDataURL();
-        images.append(figure(`${label}: ${limit} colors`, png, result));
+        images.append(figure(`${label}: ${result.numColors} colors (max ${limit})`, png, result));
         row.visuals.push({ label, limit, png, palette: result.colorMap });
       }
     }

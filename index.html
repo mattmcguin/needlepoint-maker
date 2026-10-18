@@ -232,7 +232,8 @@
       
       <div class="step-group" id="colorsStep">
         <label class="step-label" for="colorsInput">Maximum colors</label>
-        <input type="number" id="colorsInput" value="20" min="2" max="64">
+        <input type="number" id="colorsInput" value="20" min="2" max="64" aria-describedby="colorsHint">
+        <small id="colorsHint">We use fewer colors when extra shades add little detail.</small>
       </div>
       
       <div class="step-group" id="convertStep">

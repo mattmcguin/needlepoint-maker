@@ -130,64 +130,29 @@ function preserveAccentColors(samples, centers, pixelCount) {
     }
     if (replace !== -1) centers[replace] = group.lab.slice();
   }
+  return supported.every(group => centers.some(center => covers(center, group)));
 }
 
-function buildPalette(pixels, maxColors) {
-  if (!pixels.length) return [];
-  const limit = Math.max(1, Math.min(64, Math.floor(maxColors) || 1));
-  const histogram = new Map();
-  const exactColors = new Map();
-
-  for (const [r, g, b] of pixels) {
-    // Keep simple artwork exact when it already fits the requested palette.
-    if (exactColors.size <= limit) exactColors.set((r << 16) | (g << 8) | b, [r, g, b]);
-    // Four bits per channel pool shading and noise, bounding the histogram at 4,096 bins.
-    const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
-    const bin = histogram.get(key);
-    if (bin) {
-      bin.count++;
-      bin.r += r;
-      bin.g += g;
-      bin.b += b;
-    } else {
-      histogram.set(key, { key, count: 1, r, g, b });
-    }
+// Use the smallest palette that preserves source detail within a needlepoint
+// quality budget. These are perceptual tolerances, not a claim of mathematical
+// optimality: RMS <= 0.025, with at least 95% of pixels within 0.06 in hue-weighted Oklab.
+function paletteHasEnoughDetail(samples, centers, pixelCount, exactSource) {
+  let squaredError = 0;
+  let outsideTolerance = 0;
+  for (const { lab, count } of samples) {
+    const nearest = nearestColorIndex(lab, centers, 4);
+    const error = colorDistance(lab, centers[nearest], 4);
+    // A large flat field should not change color just because its error is
+    // diluted by the rest of the image (for example, distinct pastel blocks).
+    if (exactSource && count >= pixelCount * 0.05 && error > 0.03 ** 2) return false;
+    squaredError += error * count;
+    if (error > 0.06 ** 2) outsideTolerance += count;
   }
-  if (exactColors.size <= limit) {
-    return [...exactColors.entries()].sort((a, b) => a[0] - b[0]).map(entry => entry[1]);
-  }
+  return squaredError <= pixelCount * 0.025 ** 2 && outsideTolerance <= pixelCount * 0.05;
+}
 
-  const samples = [...histogram.values()].sort((a, b) => a.key - b.key).map(bin => ({
-    count: bin.count,
-    lab: rgbToOklab(
-      Math.round(bin.r / bin.count), Math.round(bin.g / bin.count), Math.round(bin.b / bin.count)
-    )
-  }));
-  const centers = [];
-  const distances = new Float64Array(samples.length).fill(Infinity);
-  let next = 0;
-  for (let i = 1; i < samples.length; i++) {
-    if (samples[i].count > samples[next].count) next = i;
-  }
-
-  // Deterministic, frequency-aware farthest seeds. Square-root frequency keeps
-  // real accent colors without letting a lone outlier dominate the palette.
-  while (centers.length < Math.min(limit, samples.length)) {
-    const center = samples[next].lab.slice();
-    centers.push(center);
-    let bestScore = 0;
-    next = -1;
-    for (let i = 0; i < samples.length; i++) {
-      distances[i] = Math.min(distances[i], colorDistance(samples[i].lab, center));
-      const score = distances[i] * Math.sqrt(samples[i].count);
-      if (score > bestScore) {
-        bestScore = score;
-        next = i;
-      }
-    }
-    if (next === -1) break;
-  }
-
+function refinePalette(samples, seeds) {
+  const centers = seeds.map(seed => seed.slice());
   // Refine with actual pixel counts so backgrounds and neutrals stay faithful.
   for (let iteration = 0; iteration < 24; iteration++) {
     const sums = centers.map(() => [0, 0, 0, 0]);
@@ -206,15 +171,87 @@ function buildPalette(pixels, maxColors) {
     if (movement < 0.00000001) break;
   }
 
-  preserveAccentColors(samples, centers, pixels.length);
+  return centers;
+}
 
-  // Rounding can make nearby centers identical. Never emit duplicate colors.
-  const palette = new Map();
-  for (const center of centers) {
-    const rgb = oklabToRgb(center);
-    palette.set(rgb.join(','), rgb);
+function buildPalette(pixels, maxColors, stitchPixels = null) {
+  if (!pixels.length) return [];
+  const limit = Math.max(1, Math.min(64, Math.floor(maxColors) || 1));
+  const histogram = new Map();
+  const exactColors = new Map();
+  for (const [r, g, b] of pixels) {
+    // Keep exact source colors available for simple artwork; nearly identical
+    // shades can still share one thread when the quality budget allows it.
+    if (exactColors.size <= 64) {
+      const key = (r << 16) | (g << 8) | b;
+      const exact = exactColors.get(key);
+      if (exact) exact.count++;
+      else exactColors.set(key, { count: 1, rgb: [r, g, b] });
+    }
+    const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+    const bin = histogram.get(key);
+    if (bin) { bin.count++; bin.r += r; bin.g += g; bin.b += b; }
+    else histogram.set(key, { key, count: 1, r, g, b });
   }
-  return [...palette.values()];
+  const exactSource = exactColors.size <= 64;
+  const samples = exactSource
+    ? [...exactColors.entries()].sort((a, b) => a[0] - b[0]).map(([, bin]) => ({
+      count: bin.count, lab: rgbToOklab(...bin.rgb)
+    }))
+    : [...histogram.values()].sort((a, b) => a.key - b.key).map(bin => ({
+      count: bin.count,
+      lab: rgbToOklab(Math.round(bin.r / bin.count), Math.round(bin.g / bin.count), Math.round(bin.b / bin.count))
+    }));
+
+  let qualitySamples = samples;
+  let qualityPixelCount = pixels.length;
+  if (stitchPixels) {
+    const detail = new Map();
+    for (const [r, g, b] of stitchPixels) {
+      const key = (r << 16) | (g << 8) | b;
+      const entry = detail.get(key);
+      if (entry) entry.count++;
+      else detail.set(key, { count: 1, lab: rgbToOklab(r, g, b) });
+    }
+    qualitySamples = [...detail.values()];
+    qualityPixelCount = stitchPixels.length;
+  }
+  const seeds = [];
+  const distances = new Float64Array(samples.length).fill(Infinity);
+  let next = 0;
+  for (let i = 1; i < samples.length; i++) {
+    if (samples[i].count > samples[next].count) next = i;
+  }
+  let palette = [];
+  while (seeds.length < Math.min(limit, samples.length)) {
+    const seed = samples[next].lab.slice();
+    seeds.push(seed);
+    const centers = refinePalette(samples, seeds);
+    const coversAccents = preserveAccentColors(samples, centers, pixels.length);
+    // Measure the actual rounded RGB colors that will be used for stitching.
+    palette = [...new Map(centers.map(center => {
+      const rgb = oklabToRgb(center);
+      return [rgb.join(','), rgb];
+    })).values()];
+    const paletteLabs = palette.map(rgb => rgbToOklab(...rgb));
+    // Either representation can establish sufficient detail: source sampling
+    // avoids inventing threads for resampling blends, and stitch sampling
+    // avoids inventing threads for source texture or compression artifacts.
+    const enoughSourceDetail = paletteHasEnoughDetail(samples, paletteLabs, pixels.length, exactSource);
+    const enoughStitchDetail = stitchPixels && paletteHasEnoughDetail(qualitySamples, paletteLabs, qualityPixelCount, exactSource);
+    if (coversAccents && (enoughSourceDetail || enoughStitchDetail)) break;
+
+    // Add a distinct, supported seed only when the current palette loses detail.
+    let bestScore = 0;
+    next = -1;
+    for (let i = 0; i < samples.length; i++) {
+      distances[i] = Math.min(distances[i], colorDistance(samples[i].lab, seed));
+      const score = distances[i] * Math.sqrt(samples[i].count);
+      if (score > bestScore) { bestScore = score; next = i; }
+    }
+    if (next === -1) break;
+  }
+  return palette;
 }
 
 // ============================================
@@ -270,7 +307,7 @@ function processImage(img, targetHeight, targetWidth, maxColors) {
   for (let i = 0; i < sampleData.length; i += 4) {
     samplePixels.push([sampleData[i], sampleData[i + 1], sampleData[i + 2]]);
   }
-  const palette = buildPalette(samplePixels, maxColors);
+  const palette = buildPalette(samplePixels, maxColors, pixels);
   const paletteLabs = palette.map(rgb => rgbToOklab(...rgb));
   const nearestColors = new Map();
   
