@@ -163,6 +163,9 @@
   };
   fixtures.push({ name: 'Lossless ornament: text and border contrast', image: strokeSource,
     check: mustKeep([[red, 'candy-cane red'], [white, 'white'], [green, 'greens']]), checkStrokes });
+  const savedSource = new Image(); savedSource.src = 'fixtures/christmas-ornament-saved.jpg'; await savedSource.decode();
+  fixtures.push({ name: 'Saved-project ornament: compressed image contrast', image: savedSource,
+    check: mustKeep([[red, 'candy-cane red'], [white, 'white'], [green, 'greens']]), checkStrokes });
   const bear = new Image(); bear.src = '../images/needlepoint-bear.jpg'; await bear.decode(); fixtures.push({ name: 'Existing bear artwork', image: bear });
 
   const output = { cases: [], runs: 0, checks: 0, failures: [], timings: [], generatedAt: new Date().toISOString() };

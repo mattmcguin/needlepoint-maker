@@ -116,7 +116,7 @@ node --test tests/*.test.cjs
 
 For the broader visual suite, serve the repository locally and open
 [`tests/browser-color-validation.html`](tests/browser-color-validation.html).
-It generates 19 deterministic patterns and tests five saved image fixtures plus
+It generates 19 deterministic patterns and tests six saved image fixtures plus
 the existing bear artwork at three stitch sizes and eight color limits. An
 optional `?baseline=/path/to/previous-app.js` adds before/after comparisons. The lossless ornament fixture checks text and border contrast as well as palette colors.
 

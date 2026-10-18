@@ -277,15 +277,27 @@ function sampleThinStrokes(sourcePixels, sourceWidth, sourceHeight, width, heigh
     let sample = cache.get(key);
     if (!sample) {
       const lab = rgbToOklab(...rgb);
-      const index = nearestColorIndex(lab, paletteLabs, 4);
-      sample = { index, flat: colorDistance(lab, paletteLabs[index], 4) <= 0.03 ** 2 };
+      let index = nearestColorIndex(lab, paletteLabs, 4);
+      const flat = colorDistance(lab, paletteLabs[index], 4) <= 0.03 ** 2;
+      // Compression can push genuine ink closer to an edge-blend shade.
+      // Classify dark source pixels by their supported dark thread instead.
+      if (lab[0] < 0.6 && paletteLabs[index][0] >= 0.6) {
+        let dark = -1, distance = Infinity;
+        for (let j = 0; j < paletteLabs.length; j++) {
+          if (paletteLabs[j][0] >= 0.6) continue;
+          const candidate = colorDistance(lab, paletteLabs[j], 4);
+          if (candidate < distance) { dark = j; distance = candidate; }
+        }
+        if (dark !== -1 && distance <= 0.12 ** 2) index = dark;
+      }
+      sample = { index, flat };
       cache.set(key, sample);
     }
     labels[i] = sample.index;
     if (sample.flat) flatPixels++;
   }
   // Continuous-tone photos should keep their normal high-quality resampling.
-  if (flatPixels < sourcePixels.length * 0.85) return strokes;
+  if (flatPixels < sourcePixels.length * 0.8) return strokes;
   const scaleX = sourceWidth / width, scaleY = sourceHeight / height;
   const area = scaleX * scaleY;
   for (let row = 0; row < height; row++) {
@@ -306,9 +318,13 @@ function sampleThinStrokes(sourcePixels, sourceWidth, sourceHeight, width, heigh
           inkArea += coverage[i];
           if (ink === -1 || coverage[i] > coverage[ink]) ink = i;
         }
-        if (paletteLabs[i][0] > 0.78) backgroundArea += coverage[i];
       }
-      // Preserve a dark majority, or a narrow mark crossing a light field.
+      if (ink !== -1) {
+        for (let i = 0; i < paletteLabs.length; i++) {
+          if (paletteLabs[i][0] - paletteLabs[ink][0] >= 0.15) backgroundArea += coverage[i];
+        }
+      }
+      // Preserve a dark majority, or a narrow mark crossing a lighter field.
       // A majority also covers strokes that nearly fill their entire cell.
       if (ink !== -1 && (inkArea >= area * 0.5 ||
           (inkArea >= area * 0.2 && backgroundArea >= area * 0.25))) {
@@ -392,7 +408,7 @@ function processImage(img, targetHeight, targetWidth, maxColors) {
         const ink = paletteLabs[strokes[pixelIdx]];
         // Only restore a lightened mark of the same hue. Keep already-dark
         // stitches, bright fields, and neighboring colored details unchanged.
-        if (averaged[0] >= 0.6 && averaged[0] < 0.9 &&
+        if (rgbToOklab(...nearest)[0] >= 0.6 && averaged[0] >= ink[0] + 0.04 && averaged[0] < 0.9 &&
             Math.hypot(averaged[1] - ink[1], averaged[2] - ink[2]) < 0.08) {
           nearest = palette[strokes[pixelIdx]];
         }
