@@ -4,7 +4,7 @@
 (async () => {
   const summary = document.getElementById('summary');
   const loadProcessor = async url => {
-    const response = await fetch(url);
+    const response = await fetch(url, { cache: 'no-store' });
     if (!response.ok) throw new Error(`Could not load ${url}`);
     return new Function(`${(await response.text()).split('// UI RENDERING')[0]};return processImage;`)();
   };
@@ -129,6 +129,40 @@
   ]) {
     const image = new Image(); image.src = `fixtures/generated/${file}.jpg`; await image.decode(); fixtures.push({ name, image, check });
   }
+  // Keep spatial evidence: a color histogram cannot detect lightened text.
+  const strokeSource = new Image(); strokeSource.src = 'fixtures/christmas-ornament-strokes.png'; await strokeSource.decode();
+  const strokeCanvas = document.createElement('canvas'); strokeCanvas.width = strokeCanvas.height = 512;
+  strokeCanvas.getContext('2d').drawImage(strokeSource, 0, 0);
+  const strokeData = strokeCanvas.getContext('2d').getImageData(0, 0, 512, 512).data;
+  const darkGreen = ([r, g, b]) => green([r, g, b]) && r < 110 && g < 145;
+  const checkStrokes = (result, size, limit) => {
+    if (limit < 4) return [];
+    const counts = { text: [0, 0], border: [0, 0] };
+    const textRects = [[.21,.21,.8,.39],[.32,.4,.68,.57],[.18,.59,.85,.735],[.35,.76,.67,.88]];
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const nx = (x + .5) / size, ny = (y + .5) / size;
+      const radius = Math.hypot(nx - .5, ny - .5);
+      const kind = radius > .437 && radius < .47 ? 'border' :
+        textRects.some(([l,t,r,b]) => nx > l && nx < r && ny > t && ny < b) ? 'text' : null;
+      if (!kind) continue;
+      let ink = 0;
+      const left = x * 512 / size, right = (x + 1) * 512 / size;
+      const top = y * 512 / size, bottom = (y + 1) * 512 / size;
+      for (let sy = Math.floor(top); sy < Math.ceil(bottom); sy++) for (let sx = Math.floor(left); sx < Math.ceil(right); sx++) {
+        const i = (sy * 512 + sx) * 4;
+        if (darkGreen(strokeData.slice(i, i + 3))) ink +=
+          (Math.min(bottom, sy + 1) - Math.max(top, sy)) * (Math.min(right, sx + 1) - Math.max(left, sx));
+      }
+      if (ink < (512 / size) ** 2 * .2) continue;
+      counts[kind][0]++;
+      const hex = result.colorMap[result.grid[y][x]];
+      if (darkGreen(hex.slice(1).match(/../g).map(v => parseInt(v, 16)))) counts[kind][1]++;
+    }
+    return Object.entries(counts).map(([kind, [total, dark]]) =>
+      expect(total > 0 && dark / total >= .95, `Keep at least 95% of supported ${kind} stitches dark (${dark}/${total})`));
+  };
+  fixtures.push({ name: 'Lossless ornament: text and border contrast', image: strokeSource,
+    check: mustKeep([[red, 'candy-cane red'], [white, 'white'], [green, 'greens']]), checkStrokes });
   const bear = new Image(); bear.src = '../images/needlepoint-bear.jpg'; await bear.decode(); fixtures.push({ name: 'Existing bear artwork', image: bear });
 
   const output = { cases: [], runs: 0, checks: 0, failures: [], timings: [], generatedAt: new Date().toISOString() };
@@ -169,7 +203,8 @@
           expect([...counts.keys()].every(code => result.colorMap[code]), 'Every stitch has a legend color'),
           expect(Object.entries(result.colorCounts).every(([code, count]) => counts.get(code) === count), 'Legend counts match stitches'),
           expect(Object.values(result.colorCounts).reduce((a, b) => a + b, 0) === targetWidth * targetHeight, 'No missing stitches'),
-          ...(fixture.check ? fixture.check(palette, limit) : [])
+          ...(fixture.check ? fixture.check(palette, limit) : []),
+          ...(fixture.checkStrokes ? fixture.checkStrokes(result, size, limit) : [])
         ];
         output.checks += checks.length; row.checks += checks.length;
         for (const check of checks.filter(check => !check.pass)) {

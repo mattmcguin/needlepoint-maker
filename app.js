@@ -262,6 +262,63 @@ function rgbToHex(r, g, b) {
   return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0').toUpperCase()).join('');
 }
 
+// Preserve thin, dark marks in otherwise flat artwork. Averaging RGB first
+// turns a narrow ink stroke into a lighter shade of its background. Instead,
+// measure how much real ink covers the stitch before choosing its thread.
+function sampleThinStrokes(sourcePixels, sourceWidth, sourceHeight, width, height, paletteLabs) {
+  const strokes = new Int16Array(width * height).fill(-1);
+  if (paletteLabs.length > 12 || sourceWidth < width * 2 || sourceHeight < height * 2) return strokes;
+  const labels = new Uint8Array(sourcePixels.length);
+  const cache = new Map();
+  let flatPixels = 0;
+  for (let i = 0; i < sourcePixels.length; i++) {
+    const rgb = sourcePixels[i];
+    const key = (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
+    let sample = cache.get(key);
+    if (!sample) {
+      const lab = rgbToOklab(...rgb);
+      const index = nearestColorIndex(lab, paletteLabs, 4);
+      sample = { index, flat: colorDistance(lab, paletteLabs[index], 4) <= 0.03 ** 2 };
+      cache.set(key, sample);
+    }
+    labels[i] = sample.index;
+    if (sample.flat) flatPixels++;
+  }
+  // Continuous-tone photos should keep their normal high-quality resampling.
+  if (flatPixels < sourcePixels.length * 0.85) return strokes;
+  const scaleX = sourceWidth / width, scaleY = sourceHeight / height;
+  const area = scaleX * scaleY;
+  for (let row = 0; row < height; row++) {
+    const top = row * scaleY, bottom = (row + 1) * scaleY;
+    for (let col = 0; col < width; col++) {
+      const left = col * scaleX, right = (col + 1) * scaleX;
+      const coverage = new Float64Array(paletteLabs.length);
+      for (let y = Math.floor(top); y < Math.ceil(bottom); y++) {
+        const overlapY = Math.min(bottom, y + 1) - Math.max(top, y);
+        for (let x = Math.floor(left); x < Math.ceil(right); x++) {
+          const overlapX = Math.min(right, x + 1) - Math.max(left, x);
+          coverage[labels[y * sourceWidth + x]] += overlapX * overlapY;
+        }
+      }
+      let ink = -1, inkArea = 0, backgroundArea = 0;
+      for (let i = 0; i < paletteLabs.length; i++) {
+        if (paletteLabs[i][0] < 0.6) {
+          inkArea += coverage[i];
+          if (ink === -1 || coverage[i] > coverage[ink]) ink = i;
+        }
+        if (paletteLabs[i][0] > 0.78) backgroundArea += coverage[i];
+      }
+      // Preserve a dark majority, or a narrow mark crossing a light field.
+      // A majority also covers strokes that nearly fill their entire cell.
+      if (ink !== -1 && (inkArea >= area * 0.5 ||
+          (inkArea >= area * 0.2 && backgroundArea >= area * 0.25))) {
+        strokes[row * width + col] = ink;
+      }
+    }
+  }
+  return strokes;
+}
+
 function processImage(img, targetHeight, targetWidth, maxColors) {
   const canvas = document.getElementById('processingCanvas');
   const ctx = canvas.getContext('2d');
@@ -310,6 +367,8 @@ function processImage(img, targetHeight, targetWidth, maxColors) {
   const palette = buildPalette(samplePixels, maxColors, pixels);
   const paletteLabs = palette.map(rgb => rgbToOklab(...rgb));
   const nearestColors = new Map();
+  const strokes = sampleThinStrokes(samplePixels, sampleCanvas.width, sampleCanvas.height,
+    targetWidth, targetHeight, paletteLabs);
   
   // Map each pixel to nearest palette color and build grid
   const gridData = [];
@@ -327,6 +386,16 @@ function processImage(img, targetHeight, targetWidth, maxColors) {
         // become blue just because the background has a similar lightness.
         nearest = palette[nearestColorIndex(rgbToOklab(r, g, b), paletteLabs, 4)];
         nearestColors.set(key, nearest);
+      }
+      if (strokes[pixelIdx] !== -1) {
+        const averaged = rgbToOklab(r, g, b);
+        const ink = paletteLabs[strokes[pixelIdx]];
+        // Only restore a lightened mark of the same hue. Keep already-dark
+        // stitches, bright fields, and neighboring colored details unchanged.
+        if (averaged[0] >= 0.6 && averaged[0] < 0.9 &&
+            Math.hypot(averaged[1] - ink[1], averaged[2] - ink[2]) < 0.08) {
+          nearest = palette[strokes[pixelIdx]];
+        }
       }
       const [pr, pg, pb] = nearest;
       const hex = rgbToHex(pr, pg, pb);

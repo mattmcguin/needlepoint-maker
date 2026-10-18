@@ -104,6 +104,8 @@ The application selects a palette in [Oklab perceptual color space](https://bott
 
 Palette sizing checks both source colors and the resulting stitch grid, so resampling blends and compression texture do not force extra threads. The quality budget is a practical heuristic, not a mathematically unique optimum. The Christmas ornament uses six or seven colors under a ceiling of 30; photographs can use more.
 
+For flat artwork, source ink coverage also preserves thin dark lettering and outlines that would otherwise fade during resizing. Continuous-tone photographs retain normal image resampling.
+
 Existing saved patterns keep their palettes until the user converts them again. Very fine details still depend on stitch resolution and the selected color limit.
 
 Run the dependency-free regression tests with:
@@ -114,9 +116,11 @@ node --test tests/*.test.cjs
 
 For the broader visual suite, serve the repository locally and open
 [`tests/browser-color-validation.html`](tests/browser-color-validation.html).
-It generates 19 deterministic patterns and tests four saved image fixtures plus
+It generates 19 deterministic patterns and tests five saved image fixtures plus
 the existing bear artwork at three stitch sizes and eight color limits. An
-optional `?baseline=/path/to/previous-app.js` adds before/after comparisons.
+optional `?baseline=/path/to/previous-app.js` adds before/after comparisons. The lossless ornament fixture checks text and border contrast as well as palette colors.
+
+[`docs/implementation/ink-contrast-validation.md`](docs/implementation/ink-contrast-validation.md) records the narrow-stroke regression and its validation.
 
 [`tests/paired-pattern-validation.html`](tests/paired-pattern-validation.html)
 compares eight original target grids against clean, shaded, lit, and JPEG source

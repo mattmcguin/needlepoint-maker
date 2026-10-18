@@ -1,5 +1,5 @@
 (async()=>{
-  const load=async url=>new Function(`${(await(await fetch(url)).text()).split('// UI RENDERING')[0]};return {processImage,rgbToOklab,colorDistance,nearestColorIndex};`)();
+  const load=async url=>new Function(`${(await(await fetch(url, {cache:"no-store"})).text()).split('// UI RENDERING')[0]};return {processImage,rgbToOklab,colorDistance,nearestColorIndex};`)();
   const api=await load('../app.js');
   const baselineUrl=new URLSearchParams(location.search).get('baseline');
   const baseline=baselineUrl?await load(baselineUrl):null;
