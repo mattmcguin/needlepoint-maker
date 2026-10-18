@@ -1,0 +1,18 @@
+{
+  "tool": "built-in imagegen",
+  "date": "2026-10-18",
+  "prompts": [
+    [
+      "dog-photo",
+      "Use case: photorealistic-natural. Asset type: image-processing test fixture for a needlepoint pattern generator. Generate a square, natural photograph of a golden retriever sitting on a green lawn, wearing a small vivid red bandana. Dog fully visible, large leafy green background, realistic golden fur shading, some white daisies in the foreground. The red bandana must be a small but clearly visible accent. Daylight, no text, no watermark."
+    ],
+    [
+      "portrait-photo",
+      "Use case: photorealistic-natural. Asset type: image-processing test fixture for a needlepoint pattern generator. Generate a square natural studio portrait of a fictional adult woman with dark brown skin, curly black hair and a cream blouse against a muted blue background. A small bright yellow flower tucked beside her ear. Head and shoulders, realistic skin highlights and shadows, natural expression. No text, no watermark."
+    ],
+    [
+      "watercolor-flowers",
+      "Use case: illustration-story. Asset type: image-processing test fixture for a needlepoint pattern generator. Generate a square watercolor botanical illustration on clean white paper: three orange and coral poppies with dark centers, broad sage and dark green leaves, and a tiny blue butterfly. Large areas of white paper, subtle watercolor variations within flowers and leaves. Flat artwork suitable for conversion to needlepoint. No text, no watermark."
+    ]
+  ]
+}

@@ -1,0 +1,15 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Needlepoint color validation</title>
+<style>
+body{margin:0;background:#f5f3ed;color:#253426;font:15px system-ui,sans-serif}main{max-width:1400px;margin:auto;padding:32px}h1{margin:0 0 12px}p{line-height:1.6;max-width:900px}.summary{position:sticky;top:0;background:#254d34;color:white;padding:15px;z-index:1;border-radius:8px}.case{background:white;border:1px solid #ddd;padding:20px;margin:20px 0;border-radius:12px}.images{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}figure{margin:0}img{width:100%;aspect-ratio:1;object-fit:contain;background:repeating-conic-gradient(#eee 0% 25%,white 0% 50%) 0/16px 16px}img.pattern{image-rendering:pixelated}figcaption{font-size:13px;padding:8px 0}.swatches{display:flex;flex-wrap:wrap;gap:3px}.swatches i{width:16px;height:16px;border:1px solid #aaa}.fail{color:#b00020}.pass{color:#286438}details{margin-top:12px}pre{white-space:pre-wrap;font-size:12px}#processingCanvas{display:none}@media(max-width:700px){main{padding:12px}.images{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+<main>
+<h1>Needlepoint color validation</h1>
+<p>Repeatable patterns and generated photo fixtures test small accents, neutrals, skin tones, transparency, shading, and aspect ratios. Each image runs at 52, 72, and 144 stitches along its longest edge with 2, 3, 4, 6, 8, 16, 32, and 64 maximum colors. The visual comparison uses 144 stitches. Some fine details require a larger canvas or more colors.</p>
+<div class="summary" id="summary">Running…</div>
+<div id="cases"></div>
+</main>
+<canvas id="processingCanvas"></canvas>
+<script src="browser-color-validation.js"></script>

@@ -1,107 +1,220 @@
 // ============================================
-// MEDIAN CUT COLOR QUANTIZATION ALGORITHM
+// PERCEPTUAL COLOR QUANTIZATION
 // ============================================
 
-class ColorBox {
-  constructor(pixels) {
-    this.pixels = pixels;
-    this.computeBounds();
-  }
-  
-  computeBounds() {
-    let rMin = 255, rMax = 0;
-    let gMin = 255, gMax = 0;
-    let bMin = 255, bMax = 0;
-    
-    for (const [r, g, b] of this.pixels) {
-      if (r < rMin) rMin = r;
-      if (r > rMax) rMax = r;
-      if (g < gMin) gMin = g;
-      if (g > gMax) gMax = g;
-      if (b < bMin) bMin = b;
-      if (b > bMax) bMax = b;
-    }
-    
-    this.rRange = rMax - rMin;
-    this.gRange = gMax - gMin;
-    this.bRange = bMax - bMin;
-  }
-  
-  get longestAxis() {
-    if (this.rRange >= this.gRange && this.rRange >= this.bRange) return 0;
-    if (this.gRange >= this.rRange && this.gRange >= this.bRange) return 1;
-    return 2;
-  }
-  
-  get volume() {
-    return this.rRange * this.gRange * this.bRange;
-  }
-  
-  split() {
-    const axis = this.longestAxis;
-    const sorted = [...this.pixels].sort((a, b) => a[axis] - b[axis]);
-    const mid = Math.floor(sorted.length / 2);
-    return [
-      new ColorBox(sorted.slice(0, mid)),
-      new ColorBox(sorted.slice(mid))
-    ];
-  }
-  
-  average() {
-    let rSum = 0, gSum = 0, bSum = 0;
-    for (const [r, g, b] of this.pixels) {
-      rSum += r;
-      gSum += g;
-      bSum += b;
-    }
-    const n = this.pixels.length;
-    return [
-      Math.round(rSum / n),
-      Math.round(gSum / n),
-      Math.round(bSum / n)
-    ];
-  }
+// Oklab measures visual differences in lightness and hue, so a small red detail
+// can compete with large areas of similar greens. Matrices by Björn Ottosson:
+// https://bottosson.github.io/posts/oklab/ (public domain implementation).
+const LINEAR_RGB = Array.from({ length: 256 }, (_, value) => {
+  const channel = value / 255;
+  return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+});
+
+function rgbToOklab(r, g, b) {
+  r = LINEAR_RGB[r];
+  g = LINEAR_RGB[g];
+  b = LINEAR_RGB[b];
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [
+    0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+  ];
 }
 
-function medianCut(pixels, maxColors) {
-  if (pixels.length === 0) return [];
-  
-  let boxes = [new ColorBox(pixels)];
-  
-  while (boxes.length < maxColors) {
-    // Find box with largest volume that can be split
-    let maxVolume = -1;
-    let maxIdx = -1;
-    for (let i = 0; i < boxes.length; i++) {
-      if (boxes[i].pixels.length > 1 && boxes[i].volume > maxVolume) {
-        maxVolume = boxes[i].volume;
-        maxIdx = i;
+function oklabToRgb([lightness, a, b]) {
+  const l = (lightness + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m = (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (lightness - 0.0894841775 * a - 1.2914855480 * b) ** 3;
+  return [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
+  ].map(channel => {
+    const srgb = channel <= 0.0031308 ? channel * 12.92 : 1.055 * channel ** (1 / 2.4) - 0.055;
+    return Math.round(Math.max(0, Math.min(1, srgb)) * 255);
+  });
+}
+
+function colorDistance(first, second, chromaWeight = 1) {
+  return (first[0] - second[0]) ** 2 +
+    chromaWeight * ((first[1] - second[1]) ** 2 + (first[2] - second[2]) ** 2);
+}
+
+function nearestColorIndex(color, palette, chromaWeight = 1) {
+  let nearest = 0;
+  let minDistance = Infinity;
+  for (let index = 0; index < palette.length; index++) {
+    const distance = colorDistance(color, palette[index], chromaWeight);
+    if (distance < minDistance) {
+      minDistance = distance;
+      nearest = index;
+    }
+  }
+  return nearest;
+}
+
+// Keep a supported hue before spending a slot on another nearby shade. Source
+// colors below 0.5% support cannot displace a palette entry through this step.
+function preserveAccentColors(samples, centers, pixelCount) {
+  const groups = new Map();
+  const hueDistance = (first, second) => {
+    const difference = Math.abs(Math.atan2(first[2], first[1]) - Math.atan2(second[2], second[1]));
+    return Math.min(difference, Math.PI * 2 - difference);
+  };
+  const hasChroma = color => Math.hypot(color[1], color[2]) >= 0.04;
+  const covers = (color, group) => hasChroma(color) && hueDistance(color, group.lab) < Math.PI / 6;
+  for (const sample of samples) {
+    if (!hasChroma(sample.lab)) continue;
+    const angle = (Math.atan2(sample.lab[2], sample.lab[1]) + Math.PI * 2) % (Math.PI * 2);
+    const key = Math.floor(angle / (Math.PI / 6));
+    const group = groups.get(key) || { count: 0, lab: [0, 0, 0] };
+    group.count += sample.count;
+    for (let channel = 0; channel < 3; channel++) group.lab[channel] += sample.lab[channel] * sample.count;
+    groups.set(key, group);
+  }
+  // Merge neighboring sectors before checking support. A hue that straddles
+  // a sector boundary should count as one accent, including across 0°/360°.
+  const merged = [...groups.values()];
+  while (merged.length > 1) {
+    let first = -1, second = -1;
+    let closest = Math.PI / 6;
+    for (let i = 0; i < merged.length; i++) {
+      for (let j = i + 1; j < merged.length; j++) {
+        const distance = hueDistance(merged[i].lab, merged[j].lab);
+        if (distance < closest) { closest = distance; first = i; second = j; }
       }
     }
-    
-    if (maxIdx === -1) break; // Can't split any further
-    
-    const [box1, box2] = boxes[maxIdx].split();
-    boxes.splice(maxIdx, 1, box1, box2);
+    if (first === -1) break;
+    merged[first].count += merged[second].count;
+    for (let channel = 0; channel < 3; channel++) merged[first].lab[channel] += merged[second].lab[channel];
+    merged.splice(second, 1);
   }
-  
-  return boxes.map(box => box.average());
+  const supported = merged
+    .filter(group => group.count >= pixelCount * 0.005)
+    .map(group => ({ count: group.count, lab: group.lab.map(value => value / group.count) }))
+    .filter(group => hasChroma(group.lab))
+    .sort((a, b) => b.count - a.count);
+
+  for (const group of supported) {
+    if (centers.some(center => covers(center, group))) continue;
+    const populations = centers.map(() => 0);
+    const removalCosts = centers.map(() => 0);
+    for (const sample of samples) {
+      const nearest = nearestColorIndex(sample.lab, centers);
+      populations[nearest] += sample.count;
+      let alternative = Infinity;
+      for (let i = 0; i < centers.length; i++) {
+        if (i !== nearest) alternative = Math.min(alternative, colorDistance(sample.lab, centers[i]));
+      }
+      removalCosts[nearest] += sample.count * (alternative - colorDistance(sample.lab, centers[nearest]));
+    }
+    const dominant = populations.indexOf(Math.max(...populations));
+    const lightest = centers.reduce((best, color, i) => color[0] > centers[best][0] ? i : best, 0);
+    const darkest = centers.reduce((best, color, i) => color[0] < centers[best][0] ? i : best, 0);
+    let replace = -1;
+    let lowestCost = Infinity;
+    for (let i = 0; i < centers.length; i++) {
+      // Protect the main field, highlights, and shadows, and every hue already
+      // represented. Only a redundant nearby shade is eligible for replacement.
+      if (i === dominant || i === lightest || i === darkest) continue;
+      const remaining = centers.filter((_, index) => index !== i);
+      if (supported.some(hue => centers.some(color => covers(color, hue)) && !remaining.some(color => covers(color, hue)))) continue;
+      if (!remaining.some(color => colorDistance(color, centers[i]) < 0.0144)) continue;
+      if (removalCosts[i] < lowestCost) {
+        replace = i;
+        lowestCost = removalCosts[i];
+      }
+    }
+    if (replace !== -1) centers[replace] = group.lab.slice();
+  }
 }
 
-// Find nearest palette color for a pixel
-function findNearestColor(r, g, b, palette) {
-  let minDist = Infinity;
-  let nearest = palette[0];
-  
-  for (const [pr, pg, pb] of palette) {
-    const dist = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
-    if (dist < minDist) {
-      minDist = dist;
-      nearest = [pr, pg, pb];
+function buildPalette(pixels, maxColors) {
+  if (!pixels.length) return [];
+  const limit = Math.max(1, Math.min(64, Math.floor(maxColors) || 1));
+  const histogram = new Map();
+  const exactColors = new Map();
+
+  for (const [r, g, b] of pixels) {
+    // Keep simple artwork exact when it already fits the requested palette.
+    if (exactColors.size <= limit) exactColors.set((r << 16) | (g << 8) | b, [r, g, b]);
+    // Four bits per channel pool shading and noise, bounding the histogram at 4,096 bins.
+    const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+    const bin = histogram.get(key);
+    if (bin) {
+      bin.count++;
+      bin.r += r;
+      bin.g += g;
+      bin.b += b;
+    } else {
+      histogram.set(key, { key, count: 1, r, g, b });
     }
   }
-  
-  return nearest;
+  if (exactColors.size <= limit) {
+    return [...exactColors.entries()].sort((a, b) => a[0] - b[0]).map(entry => entry[1]);
+  }
+
+  const samples = [...histogram.values()].sort((a, b) => a.key - b.key).map(bin => ({
+    count: bin.count,
+    lab: rgbToOklab(
+      Math.round(bin.r / bin.count), Math.round(bin.g / bin.count), Math.round(bin.b / bin.count)
+    )
+  }));
+  const centers = [];
+  const distances = new Float64Array(samples.length).fill(Infinity);
+  let next = 0;
+  for (let i = 1; i < samples.length; i++) {
+    if (samples[i].count > samples[next].count) next = i;
+  }
+
+  // Deterministic, frequency-aware farthest seeds. Square-root frequency keeps
+  // real accent colors without letting a lone outlier dominate the palette.
+  while (centers.length < Math.min(limit, samples.length)) {
+    const center = samples[next].lab.slice();
+    centers.push(center);
+    let bestScore = 0;
+    next = -1;
+    for (let i = 0; i < samples.length; i++) {
+      distances[i] = Math.min(distances[i], colorDistance(samples[i].lab, center));
+      const score = distances[i] * Math.sqrt(samples[i].count);
+      if (score > bestScore) {
+        bestScore = score;
+        next = i;
+      }
+    }
+    if (next === -1) break;
+  }
+
+  // Refine with actual pixel counts so backgrounds and neutrals stay faithful.
+  for (let iteration = 0; iteration < 24; iteration++) {
+    const sums = centers.map(() => [0, 0, 0, 0]);
+    for (const { lab, count } of samples) {
+      const sum = sums[nearestColorIndex(lab, centers)];
+      for (let channel = 0; channel < 3; channel++) sum[channel] += lab[channel] * count;
+      sum[3] += count;
+    }
+    let movement = 0;
+    for (let i = 0; i < centers.length; i++) {
+      if (!sums[i][3]) continue;
+      const updated = sums[i].slice(0, 3).map(value => value / sums[i][3]);
+      movement = Math.max(movement, colorDistance(centers[i], updated));
+      centers[i] = updated;
+    }
+    if (movement < 0.00000001) break;
+  }
+
+  preserveAccentColors(samples, centers, pixels.length);
+
+  // Rounding can make nearby centers identical. Never emit duplicate colors.
+  const palette = new Map();
+  for (const center of centers) {
+    const rgb = oklabToRgb(center);
+    palette.set(rgb.join(','), rgb);
+  }
+  return [...palette.values()];
 }
 
 // ============================================
@@ -139,8 +252,27 @@ function processImage(img, targetHeight, targetWidth, maxColors) {
     pixels.push([data[i], data[i + 1], data[i + 2]]);
   }
   
-  // Quantize colors using median cut
-  const palette = medianCut(pixels, maxColors);
+  // Choose the palette before reducing to stitches: resizing first can blend
+  // small accents into the background and remove them from consideration.
+  const sampleCanvas = document.createElement('canvas');
+  const sourceWidth = img.naturalWidth || img.width;
+  const sourceHeight = img.naturalHeight || img.height;
+  const sampleScale = Math.min(1, 512 / Math.max(sourceWidth, sourceHeight));
+  sampleCanvas.width = Math.max(1, Math.round(sourceWidth * sampleScale));
+  sampleCanvas.height = Math.max(1, Math.round(sourceHeight * sampleScale));
+  const sampleCtx = sampleCanvas.getContext('2d');
+  sampleCtx.fillStyle = '#FFFFFF';
+  sampleCtx.fillRect(0, 0, sampleCanvas.width, sampleCanvas.height);
+  sampleCtx.imageSmoothingQuality = 'high';
+  sampleCtx.drawImage(img, 0, 0, sampleCanvas.width, sampleCanvas.height);
+  const sampleData = sampleCtx.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height).data;
+  const samplePixels = [];
+  for (let i = 0; i < sampleData.length; i += 4) {
+    samplePixels.push([sampleData[i], sampleData[i + 1], sampleData[i + 2]]);
+  }
+  const palette = buildPalette(samplePixels, maxColors);
+  const paletteLabs = palette.map(rgb => rgbToOklab(...rgb));
+  const nearestColors = new Map();
   
   // Map each pixel to nearest palette color and build grid
   const gridData = [];
@@ -151,7 +283,15 @@ function processImage(img, targetHeight, targetWidth, maxColors) {
     const rowData = [];
     for (let col = 0; col < targetWidth; col++) {
       const [r, g, b] = pixels[pixelIdx];
-      const [pr, pg, pb] = findNearestColor(r, g, b, palette);
+      const key = (r << 16) | (g << 8) | b;
+      let nearest = nearestColors.get(key);
+      if (!nearest) {
+        // Favor hue when mapping stitches: a dark skin tone should not
+        // become blue just because the background has a similar lightness.
+        nearest = palette[nearestColorIndex(rgbToOklab(r, g, b), paletteLabs, 4)];
+        nearestColors.set(key, nearest);
+      }
+      const [pr, pg, pb] = nearest;
       const hex = rgbToHex(pr, pg, pb);
       
       rowData.push(hex);

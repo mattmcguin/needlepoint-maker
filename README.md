@@ -18,7 +18,7 @@ My wife enjoys needlepoint as a hobby, but finding patterns for specific images 
 - **Canvas Mesh Options**: Choose between 13 mesh (larger stitches) or 18 mesh (finer detail) canvas
 - **Flexible Dimensions**: Enter dimensions in inches or stitches, with automatic conversion based on mesh count
 - **Aspect Ratio Lock**: Optionally lock aspect ratio to prevent image distortion
-- **Color Palette Control**: Limit the number of colors using median cut quantization
+- **Color Palette Control**: Limit the number of colors with perceptual quantization that preserves distinct accents
 - **Editable Palette Colors**: Select a legend color, highlight every matching stitch, and replace that color across the pattern
 - **Interactive Grid**: Zoom in/out, toggle color codes, and show/hide grid lines
 - **Color Legend**: View all colors with their codes, hex values, and stitch counts
@@ -94,13 +94,27 @@ Use the download buttons:
 
 ### Color Quantization
 
-The application uses the **median cut algorithm** to reduce the image's color palette:
+The application selects a palette in [Oklab perceptual color space](https://bottosson.github.io/posts/oklab/):
 
-1. Collect all pixels from the resized image
-2. Recursively split the color space along the axis with the largest range
-3. Continue until reaching the target number of color "boxes"
-4. Average the colors in each box to produce the final palette
-5. Map each original pixel to its nearest palette color
+1. Sample the original image at up to 512 pixels on its longest edge, compositing transparency onto white. Select colors before resizing to stitches so small accents are not lost to blending.
+2. Group nearby source colors in a bounded histogram, then choose deterministic seeds using visual distance and square-root frequency. This balances dominant colors with smaller, distinct accents.
+3. Refine the palette using pixel-weighted clustering. Preserve exact colors when the source already fits the requested limit.
+4. Check for supported hue families absent from the palette. Replace a redundant nearby shade when possible, while protecting the dominant color, highlights, shadows, and hues already represented.
+5. Resize the image to the stitch grid and map pixels to the nearest palette color in Oklab, emphasizing hue to avoid mapping skin tones or accents onto unrelated background colors. Cache repeated mappings and count only colors actually used.
+
+Existing saved patterns keep their palettes until the user converts them again. Very fine details still depend on stitch resolution and the selected color limit.
+
+Run the dependency-free regression tests with:
+
+```bash
+node --test tests/color-quantization.test.cjs
+```
+
+For the broader visual suite, serve the repository locally and open
+[`tests/browser-color-validation.html`](tests/browser-color-validation.html).
+It generates 19 deterministic patterns and tests four saved image fixtures plus
+the existing bear artwork at three stitch sizes and eight color limits. An
+optional `?baseline=/path/to/previous-app.js` adds before/after comparisons.
 
 ### Mesh Count Conversion
 
